@@ -1,0 +1,240 @@
+package com.studyMate.world.screens.view
+{
+	import com.greensock.TweenLite;
+	import com.greensock.easing.Back;
+	import com.mylib.framework.CoreConst;
+	import com.mylib.framework.model.vo.SwitchScreenVO;
+	import com.studyMate.global.CmdStr;
+	import com.studyMate.global.Global;
+	import com.studyMate.global.SwitchScreenType;
+	import com.studyMate.model.vo.PopUpCommandVO;
+	import com.studyMate.model.vo.SendCommandVO;
+	import com.studyMate.model.vo.ToastVO;
+	import com.studyMate.model.vo.tcp.PackData;
+	import com.studyMate.world.screens.ScreenBaseMediator;
+	import com.studyMate.world.screens.WorldConst;
+	
+	import flash.events.FocusEvent;
+	import flash.events.KeyboardEvent;
+	import flash.text.AntiAliasType;
+	import flash.text.TextFormat;
+	
+	import mx.utils.StringUtil;
+	
+	import myLib.myTextBase.TextFieldHasKeyboard;
+	import myLib.myTextBase.utils.SoftKeyBoardConst;
+	
+	import org.puremvc.as3.multicore.interfaces.INotification;
+	import org.puremvc.as3.multicore.patterns.facade.Facade;
+	
+	import starling.core.Starling;
+	import starling.display.Button;
+	import starling.display.Image;
+	import starling.display.Sprite;
+	import starling.events.Event;
+	import starling.events.TouchEvent;
+	import starling.events.TouchPhase;
+	import starling.text.TextField;
+	
+	public class AlertChrHopeMediator extends ScreenBaseMediator
+	{
+		public static const NAME:String = 'AlertChrHopeMediator';
+		
+		private const HOPE_Chr:String= NAME+"HOPE_Christmas";
+		
+		
+		private var pareVO:SwitchScreenVO;
+		private var img:Image;
+		private var searchTxt:TextFieldHasKeyboard;
+		
+		public function AlertChrHopeMediator(viewComponent:Object=null)
+		{
+			super(NAME, viewComponent);
+		}
+		
+		override public function onRegister():void{
+			sendNotification(WorldConst.POPUP_SCREEN,new PopUpCommandVO(this,true));
+			
+			view.x = 377;
+			view.y = 211;
+			
+			img = new Image(Assets.getHappyIslandAtlas().getTexture("chrHopBg"));
+			img.pivotX = img.width>>1;
+			img.pivotY = img.height>>1;
+			img.x += img.width>>1;
+			img.y += img.height>>1;
+			
+			view.addChild(img);			
+			
+			img.addEventListener(TouchEvent.TOUCH,bgTouchHandler);
+			Starling.current.stage.addEventListener(TouchEvent.TOUCH,stageTouchHandler);
+			TweenLite.from(img,0.6,{scaleX:0.1,scaleY:0.1,ease:Back.easeOut,onComplete:showHandler});
+		}
+		private function delBtnHandler(e:Event):void{		
+			e.stopImmediatePropagation();
+			
+			pareVO.type = SwitchScreenType.HIDE;
+			sendNotification(WorldConst.SWITCH_SCREEN,[pareVO]);
+		}
+		
+		override public function onRemove():void{
+			sendNotification(WorldConst.REMOVE_POPUP_SCREEN,this);
+			TweenLite.killTweensOf(img);
+			TweenLite.killTweensOf(sendInfo);
+			if(searchTxt){
+				searchTxt.removeEventListener(KeyboardEvent.KEY_DOWN,searchDownHandler);
+				searchTxt.removeEventListener(FocusEvent.FOCUS_IN,searchFocusInHandler);
+				Starling.current.nativeOverlay.removeChild(searchTxt);
+			}
+			Starling.current.stage.removeEventListener(TouchEvent.TOUCH,stageTouchHandler);
+			view.removeChildren(0,-1,true);
+			super.onRemove();
+		}
+		
+		private function bgTouchHandler(e:TouchEvent):void
+		{
+			if(e.touches[0].phase==TouchPhase.BEGAN){
+				e.stopImmediatePropagation();
+			}
+		}
+		private function showHandler():void{
+			
+			var sureBtn:TextField = new TextField(125,58,"许愿","HeiTi",30,0xFFFFFF,true);
+			sureBtn.x = 427;
+			sureBtn.y = 112;
+			/*var sureBtn:Button = new Button(Assets.getMusicSeriesTexture("yesButtonIcon"));
+			sureBtn.x = 267;
+			sureBtn.y = 145;*/
+			view.addChild(sureBtn);
+			sureBtn.addEventListener(TouchEvent.TOUCH,sureBtnHandler);
+			
+			var _delBtn:Button = new Button(Assets.getHappyIslandAtlas().getTexture("delIcon"));
+			_delBtn.x = 560;			
+			view.addChild(_delBtn);
+			_delBtn.addEventListener(Event.TRIGGERED,delBtnHandler);
+			
+			var tf:TextFormat = new TextFormat("HeiTi",34,0xFFFFFF);
+			searchTxt = new TextFieldHasKeyboard();
+			searchTxt.defaultTextFormat = tf;
+			searchTxt.restrict = "^`\/";
+			searchTxt.embedFonts = true;
+			searchTxt.antiAliasType = AntiAliasType.ADVANCED;
+			searchTxt.width = 337;
+			searchTxt.height = 60;
+			searchTxt.x = 450;
+			searchTxt.y = 330;
+			searchTxt.maxChars = 18;
+			searchTxt.addEventListener(KeyboardEvent.KEY_DOWN,searchDownHandler);
+			searchTxt.addEventListener(FocusEvent.FOCUS_IN,searchFocusInHandler);
+			
+			Starling.current.nativeOverlay.addChild(searchTxt); 			
+			searchTxt.setFocus();
+			
+		}
+		
+		private function stageTouchHandler(e:TouchEvent):void
+		{
+			if(e.touches[0].phase==TouchPhase.BEGAN){
+				e.stopImmediatePropagation();
+				Starling.current.stage.removeEventListener(TouchEvent.TOUCH,stageTouchHandler);
+				pareVO.type = SwitchScreenType.HIDE;
+				sendNotification(WorldConst.SWITCH_SCREEN,[pareVO]);
+			}
+		}
+		
+		private function sureBtnHandler(e:TouchEvent):void
+		{
+			if(e.touches[0].phase==TouchPhase.BEGAN){
+				e.stopImmediatePropagation();
+				var infoStr:String = StringUtil.trim(searchTxt.text);
+				
+				if(infoStr !=""){		
+					sendInfo(infoStr);
+				}else{
+					sendNotification(CoreConst.TOAST,new ToastVO("请输入您心中的愿望"));
+				}
+			}
+			
+		}
+		
+		protected function searchFocusInHandler(event:FocusEvent):void
+		{
+			sendNotification(SoftKeyBoardConst.KEYBOARD_HASBG,0x0C92B7);//键盘带背景
+		}
+		
+		protected function searchDownHandler(e:KeyboardEvent):void
+		{
+			if(e.keyCode == 13) {//回车
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				var infoStr:String = StringUtil.trim(searchTxt.text);
+				if(infoStr !=""){																
+					sendInfo(infoStr);
+				}else{
+					sendNotification(CoreConst.TOAST,new ToastVO("抓住流星，赶紧许个愿吧~"));
+				}
+			}
+		}
+		
+		private function sendInfo(infoStr:String):void{
+			/*PackData.app.CmdIStr[0] = CmdStr.Send_FAQ_Info;
+			PackData.app.CmdIStr[1] = "150";
+			PackData.app.CmdIStr[2] = '音乐许愿';//菜单名称
+			PackData.app.CmdIStr[3] = infoStr+"(id:"+PackData.app.head.dwOperID.toString()+")";
+			PackData.app.CmdInCnt = 4;	*/
+			
+			TweenLite.killTweensOf(sendInfo);
+			if(Global.isLoading){
+				TweenLite.delayedCall(2,sendInfo,[infoStr]);
+				return;
+			}
+			
+			
+			PackData.app.CmdIStr[0] = CmdStr.SEND_FAQ_TRANSLATION;
+			PackData.app.CmdIStr[1] = PackData.app.head.dwOperID.toString();
+			PackData.app.CmdIStr[2] =  '圣诞许愿';//菜单名称
+			PackData.app.CmdIStr[3] = '0';
+			PackData.app.CmdIStr[4] = 'H';
+			PackData.app.CmdIStr[5] = infoStr;
+			PackData.app.CmdInCnt = 6;	
+			sendNotification(CoreConst.SEND_11,new SendCommandVO(HOPE_Chr));	//派发调用绘本列表参数，调用后台
+		}
+		
+		
+		
+		override public function get viewClass():Class{
+			return starling.display.Sprite;
+		}
+		public function get view():Sprite{
+			return getViewComponent() as Sprite;
+		}
+		override public function prepare(vo:SwitchScreenVO):void{
+			pareVO = vo;
+			Facade.getInstance(CoreConst.CORE).sendNotification(WorldConst.SCREEN_PREPARE_READY,vo);
+		}
+		
+		override public function handleNotification(notification:INotification):void
+		{
+			switch(notification.getName()){
+				case HOPE_Chr:
+					if(PackData.app.CmdOStr[0] == "000"){
+						sendNotification(CoreConst.TOAST,new ToastVO("已收到您的许愿,我们会尽快帮你实现。"));
+						pareVO.type = SwitchScreenType.HIDE;
+						sendNotification(WorldConst.SWITCH_SCREEN,[pareVO]);
+					}else{
+						sendNotification(CoreConst.TOAST,new ToastVO("通信有误,请稍后再用。"));
+					}
+					if(searchTxt){
+						searchTxt.text = "";
+					}
+					break;
+			}
+		}
+		
+		override public function listNotificationInterests():Array
+		{
+			// TODO Auto Generated method stub
+			return [HOPE_Chr];
+		}
+	}
+}
